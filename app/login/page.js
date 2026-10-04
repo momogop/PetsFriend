@@ -1,16 +1,18 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { supabase } from "../../lib/supabaseClient";
 
 export default function LoginPage() {
   const [email, setEmail] = useState("");
   const [status, setStatus] = useState("idle"); // idle | sending | sent | error
   const [errorMsg, setErrorMsg] = useState("");
+  const [accepted, setAccepted] = useState(false);
 
   async function handleSubmit(e) {
     e.preventDefault();
-    if (!email.trim()) return;
+    if (!email.trim() || !accepted) return;
     setStatus("sending");
     setErrorMsg("");
 
@@ -60,12 +62,29 @@ export default function LoginPage() {
               className="w-full px-3.5 py-3 rounded-xl border border-line bg-surface text-ink text-sm focus:outline-none focus:ring-2 focus:ring-primary"
             />
           </div>
+
+          <label className="flex items-start gap-2.5 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={accepted}
+              onChange={(e) => setAccepted(e.target.checked)}
+              className="mt-0.5 w-4 h-4 flex-none accent-primary"
+            />
+            <span className="text-xs text-inksoft leading-relaxed">
+              18 yaş üzerindeyim ve{" "}
+              <Link href="/terms" className="text-primary underline underline-offset-2">
+                Kullanım Şartları ve Gizlilik Politikası
+              </Link>
+              &apos;nı okudum, kabul ediyorum.
+            </span>
+          </label>
+
           {status === "error" && (
             <p className="text-xs text-accent2">{errorMsg}</p>
           )}
           <button
             type="submit"
-            disabled={status === "sending"}
+            disabled={status === "sending" || !accepted}
             className="w-full py-3.5 rounded-full bg-primary text-white text-sm font-semibold disabled:opacity-50"
           >
             {status === "sending" ? "Gönderiliyor..." : "Giriş linki gönder"}
