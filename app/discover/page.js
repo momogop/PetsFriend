@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { supabase } from "../../lib/supabaseClient";
 import { useUser } from "../../lib/useUser";
@@ -22,6 +22,11 @@ export default function DiscoverPage() {
   const [filter, setFilter] = useState("hepsi");
   const [loading, setLoading] = useState(true);
   const [toast, setToast] = useState("");
+  const [index, setIndex] = useState(0);
+
+  const [drag, setDrag] = useState({ x: 0, active: false });
+  const startX = useRef(0);
+  const cardRef = useRef(null);
 
   useEffect(() => {
     if (!user) return;
@@ -41,7 +46,6 @@ export default function DiscoverPage() {
     }
     load();
 
-    // live updates: refresh when any profile changes
     const channel = supabase
       .channel("profiles-changes")
       .on("postgres_changes", { event: "*", schema: "public", table: "profiles" }, load)
@@ -68,6 +72,10 @@ export default function DiscoverPage() {
       });
   }, [profiles, myProfile, filter]);
 
+  useEffect(() => {
+    setIndex(0);
+  }, [filter]);
+
   function showToast(msg) {
     setToast(msg);
     setTimeout(() => setToast(""), 2200);
@@ -75,12 +83,51 @@ export default function DiscoverPage() {
 
   async function sayHi(toId, dogName) {
     if (greetedIds.has(toId)) return;
-    const { error } = await supabase
-      .from("greetings")
-      .insert({ from_id: user.id, to_id: toId });
+    const { error } = await supabase.from("greetings").insert({ from_id: user.id, to_id: toId });
     if (!error) {
       setGreetedIds((prev) => new Set(prev).add(toId));
       showToast(dogName + "'in sahibine merhaba gönderildi 🐾");
+    }
+  }
+
+  function nextCard() {
+    setIndex((i) => i + 1);
+    setDrag({ x: 0, active: false });
+  }
+
+  function handleLike(current) {
+    if (!current) return;
+    sayHi(current.id, current.dog_name);
+    nextCard();
+  }
+
+  function handleSkip() {
+    nextCard();
+  }
+
+  // --- Drag/swipe handlers ---
+  function onPointerDown(e) {
+    startX.current = e.clientX ?? e.touches?.[0]?.clientX ?? 0;
+    setDrag({ x: 0, active: true });
+  }
+  function onPointerMove(e) {
+    if (!drag.active) return;
+    const clientX = e.clientX ?? e.touches?.[0]?.clientX ?? 0;
+    const delta = clientX - startX.current;
+    setDrag({ x: delta, active: true });
+  }
+  function onPointerUp() {
+    if (!drag.active) return;
+    const threshold = 110;
+    if (drag.x > threshold) {
+      const current = enriched[index];
+      setDrag({ x: 400, active: false });
+      setTimeout(() => handleLike(current), 150);
+    } else if (drag.x < -threshold) {
+      setDrag({ x: -400, active: false });
+      setTimeout(() => handleSkip(), 150);
+    } else {
+      setDrag({ x: 0, active: false });
     }
   }
 
@@ -95,10 +142,7 @@ export default function DiscoverPage() {
         <p className="text-sm text-inksoft mb-4 leading-relaxed">
           Yakınındaki köpekleri görebilmek için önce profilini oluşturman gerekiyor.
         </p>
-        <Link
-          href="/profile"
-          className="inline-block px-5 py-3 rounded-full bg-primary text-white text-sm font-semibold"
-        >
+        <Link href="/profile" className="inline-block px-5 py-3 rounded-full bg-primary text-white text-sm font-semibold">
           Profil oluştur
         </Link>
         <BottomNav />
@@ -113,10 +157,7 @@ export default function DiscoverPage() {
         <p className="text-sm text-inksoft mb-4 leading-relaxed">
           Yakınındaki köpekleri görebilmek için konumunu paylaşman gerekiyor.
         </p>
-        <Link
-          href="/profile"
-          className="inline-block px-5 py-3 rounded-full bg-primary text-white text-sm font-semibold"
-        >
+        <Link href="/profile" className="inline-block px-5 py-3 rounded-full bg-primary text-white text-sm font-semibold">
           Konumu paylaş
         </Link>
         <BottomNav />
@@ -124,11 +165,17 @@ export default function DiscoverPage() {
     );
   }
 
+  const current = enriched[index];
+  const upNext = enriched[index + 1];
+  const rotation = drag.x / 18;
+  const likeOpacity = Math.min(Math.max(drag.x / 100, 0), 1);
+  const nopeOpacity = Math.min(Math.max(-drag.x / 100, 0), 1);
+
   return (
     <div className="px-5 pt-14 safe-top">
       <h1 className="font-display text-2xl font-semibold mb-1">Yakınındakiler</h1>
       <p className="text-muted text-sm mb-4 leading-relaxed">
-        Gerçek konumuna göre sıralandı. Enerji seviyesi uyumuna göre eşleşme yüzdesi hesaplanır.
+        Sağa kaydır: merhaba de. Sola kaydır: sonraki köpeğe geç.
       </p>
 
       <div className="flex gap-2 overflow-x-auto pb-1 mb-4">
@@ -137,9 +184,7 @@ export default function DiscoverPage() {
             key={f.key}
             onClick={() => setFilter(f.key)}
             className={`flex-none px-3.5 py-2 rounded-full border text-[13px] font-medium ${
-              filter === f.key
-                ? "bg-primary border-primary text-white"
-                : "bg-surface border-line text-inksoft"
+              filter === f.key ? "bg-primary border-primary text-white" : "bg-surface border-line text-inksoft"
             }`}
           >
             {f.label}
@@ -147,57 +192,105 @@ export default function DiscoverPage() {
         ))}
       </div>
 
-      {enriched.length === 0 ? (
-        <div className="text-center py-14 text-muted">
+      {!current ? (
+        <div className="text-center py-20 text-muted">
           <div className="text-3xl mb-2">🐕</div>
-          <p className="text-sm">Bu filtreye uyan kimse yok. Zaman içinde daha çok kullanıcı katıldıkça burası dolacak.</p>
+          <p className="text-sm">Şimdilik bu kadar. Zaman içinde daha çok kullanıcı katıldıkça burası dolacak.</p>
+          {index > 0 && (
+            <button
+              onClick={() => setIndex(0)}
+              className="mt-4 text-sm font-semibold text-primary underline underline-offset-2"
+            >
+              Baştan göster
+            </button>
+          )}
         </div>
       ) : (
-        <div className="space-y-3.5 pb-6">
-          {enriched.map((p) => {
-            const isGreeted = greetedIds.has(p.id);
-            return (
-              <div key={p.id} className="bg-surface rounded-card p-4 shadow-sm flex gap-3.5">
+        <div className="relative w-full" style={{ height: "62vh", maxHeight: "560px" }}>
+          {upNext && (
+            <div className="absolute inset-0 bg-surface rounded-card shadow-sm scale-95 translate-y-2 opacity-70" />
+          )}
+
+          <div
+            ref={cardRef}
+            onPointerDown={onPointerDown}
+            onPointerMove={onPointerMove}
+            onPointerUp={onPointerUp}
+            onPointerLeave={onPointerUp}
+            style={{
+              transform: `translateX(${drag.x}px) rotate(${rotation}deg)`,
+              transition: drag.active ? "none" : "transform 0.3s ease",
+              touchAction: "pan-y",
+            }}
+            className="absolute inset-0 bg-surface rounded-card shadow-sm overflow-hidden flex flex-col cursor-grab active:cursor-grabbing select-none"
+          >
+            <div className="relative flex-1 bg-surface2 flex items-center justify-center overflow-hidden">
+              {current.photo_url ? (
+                <img src={current.photo_url} alt={current.dog_name} className="w-full h-full object-cover" draggable={false} />
+              ) : (
                 <div
-                  className="w-[58px] h-[58px] rounded-2xl flex-none flex items-center justify-center text-white text-xl font-bold"
-                  style={{ background: avatarColor(p.id) }}
+                  className="w-28 h-28 rounded-full flex items-center justify-center text-white text-4xl font-bold"
+                  style={{ background: avatarColor(current.id) }}
                 >
-                  {p.dog_name?.charAt(0)?.toUpperCase()}
+                  {current.dog_name?.charAt(0)?.toUpperCase()}
                 </div>
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-baseline justify-between gap-2">
-                    <span className="font-display font-semibold text-[17px]">{p.dog_name}</span>
-                    <span className="text-[12px] text-muted flex-none">{formatDistance(p.km)}</span>
-                  </div>
-                  <div className="text-[13px] text-inksoft mb-2">{p.breed}</div>
-                  <div className="flex gap-1.5 flex-wrap mb-2.5">
-                    <span className={`text-[11px] px-2.5 py-1 rounded-full capitalize ${energyTagClass(p.energy)}`}>
-                      {p.energy}
-                    </span>
-                    {p.note && (
-                      <span className="text-[11px] px-2.5 py-1 rounded-full bg-surface2 text-inksoft">
-                        {p.note}
-                      </span>
-                    )}
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <span className="text-[12px] font-semibold text-primary">
-                      {p.score != null ? `%${p.score} uyum` : ""}
-                    </span>
-                    <button
-                      onClick={() => sayHi(p.id, p.dog_name)}
-                      disabled={isGreeted}
-                      className={`text-[13px] font-semibold px-4 py-2 rounded-full ${
-                        isGreeted ? "border border-line text-inksoft" : "bg-primary text-white"
-                      }`}
-                    >
-                      {isGreeted ? "Gönderildi ✓" : "Merhaba de"}
-                    </button>
-                  </div>
-                </div>
+              )}
+
+              <div
+                className="absolute top-6 left-6 border-4 border-primary text-primary font-display font-bold text-2xl px-3 py-1 rounded-lg -rotate-12"
+                style={{ opacity: likeOpacity }}
+              >
+                MERHABA
               </div>
-            );
-          })}
+              <div
+                className="absolute top-6 right-6 border-4 border-accent2 text-accent2 font-display font-bold text-2xl px-3 py-1 rounded-lg rotate-12"
+                style={{ opacity: nopeOpacity }}
+              >
+                GEÇ
+              </div>
+            </div>
+
+            <div className="p-4">
+              <div className="flex items-baseline justify-between gap-2">
+                <span className="font-display font-semibold text-xl">{current.dog_name}</span>
+                <span className="text-[12px] text-muted flex-none">{formatDistance(current.km)}</span>
+              </div>
+              <div className="text-sm text-inksoft mb-2">{current.breed}</div>
+              <div className="flex gap-1.5 flex-wrap mb-1">
+                <span className={`text-[11px] px-2.5 py-1 rounded-full capitalize ${energyTagClass(current.energy)}`}>
+                  {current.energy}
+                </span>
+                {current.note && (
+                  <span className="text-[11px] px-2.5 py-1 rounded-full bg-surface2 text-inksoft">{current.note}</span>
+                )}
+                {current.score != null && (
+                  <span className="text-[11px] px-2.5 py-1 rounded-full bg-primary/15 text-primary font-semibold">
+                    %{current.score} uyum
+                  </span>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {current && (
+        <div className="flex items-center justify-center gap-6 mt-6">
+          <button
+            onClick={handleSkip}
+            className="w-16 h-16 rounded-full bg-surface border border-line shadow-sm flex items-center justify-center text-2xl text-accent2"
+            aria-label="Geç"
+          >
+            ✕
+          </button>
+          <button
+            onClick={() => handleLike(current)}
+            disabled={greetedIds.has(current.id)}
+            className="w-16 h-16 rounded-full bg-primary shadow-sm flex items-center justify-center text-2xl text-white disabled:opacity-50"
+            aria-label="Merhaba de"
+          >
+            🐾
+          </button>
         </div>
       )}
 
