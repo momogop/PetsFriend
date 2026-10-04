@@ -35,7 +35,7 @@ export default function LoginPage() {
       <div className="text-center mb-10">
         <div className="text-4xl mb-3">🐾</div>
         <h1 className="font-display text-2xl font-semibold">Pets Friend</h1>
-        <p className="text-muted text-sm mt-1">Mahallende köpeğine denk biri var</p>
+        <p className="text-muted text-sm mt-1">Köpeğin için en yakın yürüyüş arkadaşını bul</p>
       </div>
 
       {status === "sent" ? (
