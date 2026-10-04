@@ -12,6 +12,7 @@ export default function ProfilePage() {
   const { user, loading: userLoading } = useUser(true);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [uploading, setUploading] = useState(false);
   const [toast, setToast] = useState("");
 
   const [dogName, setDogName] = useState("");
@@ -21,7 +22,8 @@ export default function ProfilePage() {
   const [note, setNote] = useState("");
   const [lat, setLat] = useState(null);
   const [lng, setLng] = useState(null);
-  const [locStatus, setLocStatus] = useState("idle"); // idle | requesting | granted | denied
+  const [photoUrl, setPhotoUrl] = useState(null);
+  const [locStatus, setLocStatus] = useState("idle");
 
   useEffect(() => {
     if (!user) return;
@@ -35,6 +37,7 @@ export default function ProfilePage() {
         setNote(data.note || "");
         setLat(data.lat ?? null);
         setLng(data.lng ?? null);
+        setPhotoUrl(data.photo_url || null);
         if (data.lat != null) setLocStatus("granted");
       }
       setLoading(false);
@@ -65,6 +68,49 @@ export default function ProfilePage() {
       },
       { enableHighAccuracy: true, timeout: 10000 }
     );
+  }
+
+  async function handlePhotoChange(e) {
+    const file = e.target.files?.[0];
+    if (!file || !user) return;
+
+    if (!file.type.startsWith("image/")) {
+      showToast("Lütfen bir resim dosyası seç");
+      return;
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      showToast("Fotoğraf 5MB'tan küçük olmalı");
+      return;
+    }
+
+    setUploading(true);
+    const ext = file.name.split(".").pop() || "jpg";
+    const path = `${user.id}/photo.${ext}`;
+
+    const { error: uploadError } = await supabase.storage
+      .from("avatars")
+      .upload(path, file, { upsert: true, cacheControl: "3600" });
+
+    if (uploadError) {
+      setUploading(false);
+      showToast("Yüklenemedi: " + uploadError.message);
+      return;
+    }
+
+    const { data } = supabase.storage.from("avatars").getPublicUrl(path);
+    const publicUrl = data.publicUrl + "?t=" + Date.now();
+
+    const { error: dbError } = await supabase
+      .from("profiles")
+      .upsert({ id: user.id, photo_url: publicUrl, updated_at: new Date().toISOString() });
+
+    setUploading(false);
+    if (dbError) {
+      showToast("Kaydedilemedi: " + dbError.message);
+      return;
+    }
+    setPhotoUrl(publicUrl);
+    showToast("Fotoğraf güncellendi 📸");
   }
 
   async function handleSave(e) {
@@ -104,6 +150,30 @@ export default function ProfilePage() {
       <p className="text-muted text-sm mb-5 leading-relaxed">
         Köpeğinin bilgileri ve konumun, sana uygun yürüyüş arkadaşlarını göstermemizi sağlar.
       </p>
+
+      <div className="flex flex-col items-center mb-6">
+        <div className="relative w-28 h-28 rounded-full overflow-hidden bg-surface2 border-2 border-line flex items-center justify-center mb-3">
+          {photoUrl ? (
+            <img src={photoUrl} alt="Köpek fotoğrafı" className="w-full h-full object-cover" />
+          ) : (
+            <span className="text-4xl">🐶</span>
+          )}
+          {uploading && (
+            <div className="absolute inset-0 bg-black/40 flex items-center justify-center text-white text-xs">
+              Yükleniyor...
+            </div>
+          )}
+        </div>
+        <label className="text-sm font-semibold text-primary underline underline-offset-2 cursor-pointer">
+          {photoUrl ? "Fotoğrafı değiştir" : "Fotoğraf ekle"}
+          <input
+            type="file"
+            accept="image/*"
+            onChange={handlePhotoChange}
+            className="hidden"
+          />
+        </label>
+      </div>
 
       <div className="bg-surface rounded-card p-4 mb-5 shadow-sm">
         <p className="text-xs font-semibold text-inksoft mb-2">Konum</p>
