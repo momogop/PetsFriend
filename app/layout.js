@@ -2,7 +2,7 @@ import "./globals.css";
 
 export const metadata = {
   title: "Pets Friend",
-  description: "Mahallende köpeğine denk biri var",
+  description: "Köpeğin için en yakın yürüyüş arkadaşını bul",
 };
 
 export const viewport = {
