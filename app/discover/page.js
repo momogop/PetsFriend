@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { supabase } from "../../lib/supabaseClient";
 import { useUser } from "../../lib/useUser";
 import BottomNav from "../../components/BottomNav";
@@ -15,6 +16,7 @@ const FILTERS = [
 ];
 
 export default function DiscoverPage() {
+  const router = useRouter();
   const { user, loading: userLoading } = useUser(true);
   const [myProfile, setMyProfile] = useState(null);
   const [profiles, setProfiles] = useState([]);
@@ -23,6 +25,7 @@ export default function DiscoverPage() {
   const [loading, setLoading] = useState(true);
   const [toast, setToast] = useState("");
   const [index, setIndex] = useState(0);
+  const [matchInfo, setMatchInfo] = useState(null); // { matchId, dogName, photoUrl }
 
   const [drag, setDrag] = useState({ x: 0, active: false });
   const startX = useRef(0);
@@ -81,12 +84,29 @@ export default function DiscoverPage() {
     setTimeout(() => setToast(""), 2200);
   }
 
-  async function sayHi(toId, dogName) {
-    if (greetedIds.has(toId)) return;
-    const { error } = await supabase.from("greetings").insert({ from_id: user.id, to_id: toId });
-    if (!error) {
-      setGreetedIds((prev) => new Set(prev).add(toId));
-      showToast(dogName + "'in sahibine merhaba gönderildi 🐾");
+  async function sayHi(toProfile) {
+    if (greetedIds.has(toProfile.id)) return;
+    const { error } = await supabase.from("greetings").insert({ from_id: user.id, to_id: toProfile.id });
+    if (error) return;
+
+    setGreetedIds((prev) => new Set(prev).add(toProfile.id));
+    showToast(toProfile.dog_name + "'in sahibine merhaba gönderildi 🐾");
+
+    // Eşleşme oluştu mu kontrol et (karşı taraf da bizi daha önce beğenmiş olabilir)
+    const { data: match } = await supabase
+      .from("matches")
+      .select("*")
+      .or(
+        `and(user_a.eq.${user.id},user_b.eq.${toProfile.id}),and(user_a.eq.${toProfile.id},user_b.eq.${user.id})`
+      )
+      .maybeSingle();
+
+    if (match) {
+      setMatchInfo({
+        matchId: match.id,
+        dogName: toProfile.dog_name,
+        photoUrl: toProfile.photo_url,
+      });
     }
   }
 
@@ -97,7 +117,7 @@ export default function DiscoverPage() {
 
   function handleLike(current) {
     if (!current) return;
-    sayHi(current.id, current.dog_name);
+    sayHi(current);
     nextCard();
   }
 
@@ -105,7 +125,6 @@ export default function DiscoverPage() {
     nextCard();
   }
 
-  // --- Drag/swipe handlers ---
   function onPointerDown(e) {
     startX.current = e.clientX ?? e.touches?.[0]?.clientX ?? 0;
     setDrag({ x: 0, active: true });
@@ -297,6 +316,30 @@ export default function DiscoverPage() {
       {toast && (
         <div className="fixed left-1/2 -translate-x-1/2 bottom-24 bg-ink text-bg text-xs font-medium px-4 py-2.5 rounded-full z-50">
           {toast}
+        </div>
+      )}
+
+      {matchInfo && (
+        <div className="fixed inset-0 bg-ink/70 flex items-center justify-center z-50 px-6">
+          <div className="bg-surface rounded-card p-6 text-center max-w-sm w-full">
+            <div className="text-4xl mb-2">🎉</div>
+            <h2 className="font-display text-2xl font-bold text-primary mb-1">Eşleştiniz!</h2>
+            <p className="text-sm text-inksoft mb-5">
+              Sen ve <strong>{matchInfo.dogName}</strong> birbirinizi beğendiniz. Şimdi sohbete başlayabilirsiniz.
+            </p>
+            <button
+              onClick={() => router.push(`/chats/${matchInfo.matchId}`)}
+              className="w-full py-3 rounded-full bg-primary text-white text-sm font-semibold mb-2"
+            >
+              Sohbete git
+            </button>
+            <button
+              onClick={() => setMatchInfo(null)}
+              className="w-full py-2 text-xs text-muted underline underline-offset-2"
+            >
+              Daha sonra
+            </button>
+          </div>
         </div>
       )}
 
