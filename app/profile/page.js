@@ -7,6 +7,8 @@ import BottomNav from "../../components/BottomNav";
 
 const SIZES = ["küçük", "orta", "büyük"];
 const ENERGIES = ["sakin", "orta", "enerjik"];
+const OWNER_GENDERS = ["kadın", "erkek", "belirtmek istemiyorum"];
+const PET_GENDERS = ["dişi", "erkek"];
 
 export default function ProfilePage() {
   const { user, loading: userLoading } = useUser(true);
@@ -23,6 +25,8 @@ export default function ProfilePage() {
   const [lat, setLat] = useState(null);
   const [lng, setLng] = useState(null);
   const [photoUrl, setPhotoUrl] = useState(null);
+  const [ownerGender, setOwnerGender] = useState("");
+  const [petGender, setPetGender] = useState("");
   const [locStatus, setLocStatus] = useState("idle");
 
   useEffect(() => {
@@ -38,6 +42,8 @@ export default function ProfilePage() {
         setLat(data.lat ?? null);
         setLng(data.lng ?? null);
         setPhotoUrl(data.photo_url || null);
+        setOwnerGender(data.owner_gender || "");
+        setPetGender(data.pet_gender || "");
         if (data.lat != null) setLocStatus("granted");
       }
       setLoading(false);
@@ -129,6 +135,8 @@ export default function ProfilePage() {
       note: note.trim(),
       lat,
       lng,
+      owner_gender: ownerGender || null,
+      pet_gender: petGender || null,
       updated_at: new Date().toISOString(),
     };
     const { error } = await supabase.from("profiles").upsert(payload);
@@ -166,12 +174,7 @@ export default function ProfilePage() {
         </div>
         <label className="text-sm font-semibold text-primary underline underline-offset-2 cursor-pointer">
           {photoUrl ? "Fotoğrafı değiştir" : "Fotoğraf ekle"}
-          <input
-            type="file"
-            accept="image/*"
-            onChange={handlePhotoChange}
-            className="hidden"
-          />
+          <input type="file" accept="image/*" onChange={handlePhotoChange} className="hidden" />
         </label>
       </div>
 
@@ -213,11 +216,17 @@ export default function ProfilePage() {
             className="input"
           />
         </Field>
+        <Field label="Köpeğin cinsiyeti">
+          <Segmented options={PET_GENDERS} value={petGender} onChange={setPetGender} />
+        </Field>
         <Field label="Boyu">
           <Segmented options={SIZES} value={size} onChange={setSize} />
         </Field>
         <Field label="Enerji seviyesi">
           <Segmented options={ENERGIES} value={energy} onChange={setEnergy} />
+        </Field>
+        <Field label="Senin cinsiyetin (opsiyonel)">
+          <Segmented options={OWNER_GENDERS} value={ownerGender} onChange={setOwnerGender} small />
         </Field>
         <Field label="Kısa not (opsiyonel)">
           <textarea
@@ -275,15 +284,15 @@ function Field({ label, children }) {
   );
 }
 
-function Segmented({ options, value, onChange }) {
+function Segmented({ options, value, onChange, small }) {
   return (
-    <div className="flex gap-2">
+    <div className="flex gap-2 flex-wrap">
       {options.map((opt) => (
         <button
           type="button"
           key={opt}
           onClick={() => onChange(opt)}
-          className={`flex-1 text-center py-2.5 px-2 rounded-xl border text-[13px] font-medium capitalize ${
+          className={`${small ? "flex-none px-3" : "flex-1"} text-center py-2.5 text-[13px] font-medium capitalize rounded-xl border ${
             value === opt
               ? "border-primary bg-primary/10 text-primary font-bold"
               : "border-line bg-surface text-inksoft"
