@@ -15,6 +15,7 @@ export default function ProfilePage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const [galleryUploading, setGalleryUploading] = useState(false);
   const [toast, setToast] = useState("");
 
   const [dogName, setDogName] = useState("");
@@ -28,6 +29,7 @@ export default function ProfilePage() {
   const [ownerGender, setOwnerGender] = useState("");
   const [petGender, setPetGender] = useState("");
   const [locStatus, setLocStatus] = useState("idle");
+  const [gallery, setGallery] = useState([]);
 
   useEffect(() => {
     if (!user) return;
@@ -46,6 +48,14 @@ export default function ProfilePage() {
         setPetGender(data.pet_gender || "");
         if (data.lat != null) setLocStatus("granted");
       }
+
+      const { data: photos } = await supabase
+        .from("profile_photos")
+        .select("*")
+        .eq("user_id", user.id)
+        .order("created_at", { ascending: true });
+      setGallery(photos || []);
+
       setLoading(false);
     })();
   }, [user]);
@@ -119,6 +129,63 @@ export default function ProfilePage() {
     showToast("Fotoğraf güncellendi 📸");
   }
 
+  async function handleGalleryAdd(e) {
+    const file = e.target.files?.[0];
+    if (!file || !user) return;
+
+    if (!file.type.startsWith("image/")) {
+      showToast("Lütfen bir resim dosyası seç");
+      return;
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      showToast("Fotoğraf 5MB'tan küçük olmalı");
+      return;
+    }
+    if (gallery.length >= 6) {
+      showToast("En fazla 6 ek fotoğraf ekleyebilirsin");
+      return;
+    }
+
+    setGalleryUploading(true);
+    const ext = file.name.split(".").pop() || "jpg";
+    const path = `${user.id}/gallery/${Date.now()}.${ext}`;
+
+    const { error: uploadError } = await supabase.storage
+      .from("avatars")
+      .upload(path, file, { upsert: false, cacheControl: "3600" });
+
+    if (uploadError) {
+      setGalleryUploading(false);
+      showToast("Yüklenemedi: " + uploadError.message);
+      return;
+    }
+
+    const { data } = supabase.storage.from("avatars").getPublicUrl(path);
+    const publicUrl = data.publicUrl + "?t=" + Date.now();
+
+    const { data: inserted, error: dbError } = await supabase
+      .from("profile_photos")
+      .insert({ user_id: user.id, url: publicUrl })
+      .select()
+      .single();
+
+    setGalleryUploading(false);
+    if (dbError) {
+      showToast("Kaydedilemedi: " + dbError.message);
+      return;
+    }
+    setGallery((prev) => [...prev, inserted]);
+    showToast("Fotoğraf eklendi 📸");
+  }
+
+  async function handleGalleryDelete(photoId) {
+    const { error } = await supabase.from("profile_photos").delete().eq("id", photoId);
+    if (!error) {
+      setGallery((prev) => prev.filter((p) => p.id !== photoId));
+      showToast("Fotoğraf silindi");
+    }
+  }
+
   async function handleSave(e) {
     e.preventDefault();
     if (!dogName.trim() || !breed.trim()) {
@@ -159,7 +226,7 @@ export default function ProfilePage() {
         Köpeğinin bilgileri ve konumun, sana uygun yürüyüş arkadaşlarını göstermemizi sağlar.
       </p>
 
-      <div className="flex flex-col items-center mb-6">
+      <div className="flex flex-col items-center mb-5">
         <div className="relative w-28 h-28 rounded-full overflow-hidden bg-surface2 border-2 border-line flex items-center justify-center mb-3">
           {photoUrl ? (
             <img src={photoUrl} alt="Köpek fotoğrafı" className="w-full h-full object-cover" />
@@ -173,9 +240,48 @@ export default function ProfilePage() {
           )}
         </div>
         <label className="text-sm font-semibold text-primary underline underline-offset-2 cursor-pointer">
-          {photoUrl ? "Fotoğrafı değiştir" : "Fotoğraf ekle"}
+          {photoUrl ? "Ana fotoğrafı değiştir" : "Ana fotoğraf ekle"}
           <input type="file" accept="image/*" onChange={handlePhotoChange} className="hidden" />
         </label>
+      </div>
+
+      <div className="bg-surface rounded-card p-4 mb-5 shadow-sm">
+        <div className="flex items-center justify-between mb-3">
+          <p className="text-xs font-semibold text-inksoft">Diğer fotoğraflar ({gallery.length}/6)</p>
+          {gallery.length < 6 && (
+            <label className="text-xs font-semibold text-primary underline underline-offset-2 cursor-pointer">
+              {galleryUploading ? "Yükleniyor..." : "+ Ekle"}
+              <input
+                type="file"
+                accept="image/*"
+                onChange={handleGalleryAdd}
+                className="hidden"
+                disabled={galleryUploading}
+              />
+            </label>
+          )}
+        </div>
+        {gallery.length === 0 ? (
+          <p className="text-xs text-muted leading-relaxed">
+            Köpeğinle veya kendinle çektiğin ek fotoğraflar ekleyebilirsin, profilini ziyaret edenler bunları görür.
+          </p>
+        ) : (
+          <div className="grid grid-cols-3 gap-2">
+            {gallery.map((photo) => (
+              <div key={photo.id} className="relative aspect-square rounded-xl overflow-hidden bg-surface2">
+                <img src={photo.url} alt="" className="w-full h-full object-cover" />
+                <button
+                  type="button"
+                  onClick={() => handleGalleryDelete(photo.id)}
+                  className="absolute top-1 right-1 w-5 h-5 rounded-full bg-ink/70 text-white text-[11px] flex items-center justify-center"
+                  aria-label="Sil"
+                >
+                  ✕
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
 
       <div className="bg-surface rounded-card p-4 mb-5 shadow-sm">
