@@ -1,5 +1,9 @@
 {
   "name": "PetsFriend",
+  "id": "/",
+  "description": "Köpeğin için en yakın yürüyüş arkadaşını bul",
+  "orientation": "portrait",
+  "lang": "tr",
   "short_name": "PetsFriend",
   "start_url": "/",
   "scope": "/",
