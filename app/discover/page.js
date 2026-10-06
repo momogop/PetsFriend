@@ -25,7 +25,7 @@ export default function DiscoverPage() {
   const [loading, setLoading] = useState(true);
   const [toast, setToast] = useState("");
   const [index, setIndex] = useState(0);
-  const [matchInfo, setMatchInfo] = useState(null); // { matchId, dogName, photoUrl }
+  const [matchInfo, setMatchInfo] = useState(null);
 
   const [drag, setDrag] = useState({ x: 0, active: false });
   const startX = useRef(0);
@@ -92,7 +92,6 @@ export default function DiscoverPage() {
     setGreetedIds((prev) => new Set(prev).add(toProfile.id));
     showToast(toProfile.dog_name + "'in sahibine merhaba gönderildi 🐾");
 
-    // Eşleşme oluştu mu kontrol et (karşı taraf da bizi daha önce beğenmiş olabilir)
     const { data: match } = await supabase
       .from("matches")
       .select("*")
@@ -271,14 +270,31 @@ export default function DiscoverPage() {
 
             <div className="p-4">
               <div className="flex items-baseline justify-between gap-2">
-                <span className="font-display font-semibold text-xl">{current.dog_name}</span>
+                <span className="font-display font-semibold text-xl">
+                  {current.dog_name}
+                  {current.pet_gender && (
+                    <span className="ml-1.5 text-base align-middle">
+                      {current.pet_gender === "dişi" ? "♀" : "♂"}
+                    </span>
+                  )}
+                </span>
                 <span className="text-[12px] text-muted flex-none">{formatDistance(current.km)}</span>
               </div>
-              <div className="text-sm text-inksoft mb-2">{current.breed}</div>
+              <div className="text-sm text-inksoft mb-2">
+                {current.breed}
+                {current.owner_gender && current.owner_gender !== "belirtmek istemiyorum" && (
+                  <span className="text-muted"> · Sahibi: {current.owner_gender}</span>
+                )}
+              </div>
               <div className="flex gap-1.5 flex-wrap mb-1">
                 <span className={`text-[11px] px-2.5 py-1 rounded-full capitalize ${energyTagClass(current.energy)}`}>
                   {current.energy}
                 </span>
+                {current.pet_gender && (
+                  <span className="text-[11px] px-2.5 py-1 rounded-full bg-surface2 text-inksoft capitalize">
+                    {current.pet_gender}
+                  </span>
+                )}
                 {current.note && (
                   <span className="text-[11px] px-2.5 py-1 rounded-full bg-surface2 text-inksoft">{current.note}</span>
                 )}
