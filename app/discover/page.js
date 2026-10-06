@@ -286,7 +286,7 @@ export default function DiscoverPage() {
                   <span className="text-muted"> · Sahibi: {current.owner_gender}</span>
                 )}
               </div>
-              <div className="flex gap-1.5 flex-wrap mb-1">
+              <div className="flex gap-1.5 flex-wrap mb-2">
                 <span className={`text-[11px] px-2.5 py-1 rounded-full capitalize ${energyTagClass(current.energy)}`}>
                   {current.energy}
                 </span>
@@ -304,6 +304,12 @@ export default function DiscoverPage() {
                   </span>
                 )}
               </div>
+              <Link
+                href={`/profile/${current.id}`}
+                className="text-xs font-semibold text-primary underline underline-offset-2"
+              >
+                Profili incele →
+              </Link>
             </div>
           </div>
         </div>
