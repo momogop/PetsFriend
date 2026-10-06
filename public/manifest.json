@@ -7,7 +7,7 @@
   "short_name": "PetsFriend",
   "start_url": "/",
   "scope": "/",
-  "display": "standalone",
+  "display": "fullscreen",
   "background_color": "#ffffff",
   "theme_color": "#f97316",
   "icons": [
